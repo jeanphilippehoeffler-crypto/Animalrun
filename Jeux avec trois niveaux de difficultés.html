@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Animal Runner - Menu de niveaux</title>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #0acf2b, #12bb3c);
+      font-family: "Segoe UI", Roboto, sans-serif;
+      color: white;
+      text-align: center;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px;
+    }
+    #menu, #game {
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+    h1 { margin: 4px; }
+    .btn {
+      border: 2px solid #fff;
+      color: #fff;
+      background: rgba(0,0,0,0.25);
+      padding: 12px 18px;
+      font-size: 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.2s;
+      margin: 6px;
+    }
+    .btn:hover { transform: scale(1.04); background: rgba(255,255,255,0.15); }
+    #gameCanvas {
+      border: 3px solid #023047;
+      background: #a8dadc;
+      display: block;
+      margin: 12px auto;
+      border-radius: 10px;
+    }
+    #score { font-size: 22px; margin: 8px; }
+    #message { font-size: 20px; color: #ffb703; margin-top: 8px; }
+    #back { margin-top: 12px; border-color: #ffdd57; color: #111; background: #ffdd57; }
+  </style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>Animal Runner</h1>
+  <p>Choisis un niveau pour démarrer</p>
+  <button class="btn" data-speed="3">Facile (lent)</button>
+  <button class="btn" data-speed="5">Intermédiaire (moyen)</button>
+  <button class="btn" data-speed="7">Difficile (rapide)</button>
+</div>
+
+<div id="game" style="display:none">
+  <h1 id="levelTitle">Niveau</h1>
+  <div id="score">Score: 0</div>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div id="message"></div>
+  <button class="btn" id="back">Retour au menu</button>
+</div>
+
+<script>
+const menu = document.getElementById("menu");
+const game = document.getElementById("game");
+const levelTitle = document.getElementById("levelTitle");
+const scoreEl = document.getElementById("score");
+const messageEl = document.getElementById("message");
+const backBtn = document.getElementById("back");
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const G = 0.7;
+let gameOver = false;
+let score = 0;
+let speed = 4;
+let lastSpeed = 4;
+
+const player = { x: 80, y: 300, w: 60, h: 60, dy:0, jump:-13, slide:false };
+const obstacles = [];
+let spawnTimer = 0;
+let animId;
+
+const playerImage = new Image();
+playerImage.src = "player.png";
+playerImage.onerror = () => { console.warn("player.png introuvable, fallback rectangle"); };
+
+function spawnObstacle() {
+  const type = Math.random() < 0.6 ? "cactus" : "bird";
+  obstacles.push({
+    x: canvas.width + 10,
+    y: type === "cactus" ? 320 : 250,
+    w: type === "cactus" ? 30 : 40,
+    h: type === "cactus" ? 50 : 35,
+    type
+  });
+}
+
+function checkCollision(a,b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update() {
+  if (gameOver) return;
+  spawnTimer--;
+  if (spawnTimer <= 0) {
+    spawnObstacle();
+    spawnTimer = Math.max(40, 120 - Math.floor(score / 10));
+  }
+
+  player.dy += G;
+  player.y += player.dy;
+  if (player.y > 300) {
+    player.y = 300; player.dy = 0; player.slide = false;
+  }
+
+  for (let i = obstacles.length-1; i>=0; i--) {
+    obstacles[i].x -= speed;
+    if (obstacles[i].x + obstacles[i].w < 0) obstacles.splice(i,1);
+
+    const pRect = {
+      x: player.x,
+      y: player.y + (player.slide ? player.h*0.5 : 0),
+      w: player.w,
+      h: player.slide ? player.h*0.5 : player.h
+    };
+    if (checkCollision(pRect, obstacles[i])) {
+      gameOver = true;
+      messageEl.textContent = "💥 GAME OVER – appuie sur R";
+    }
+  }
+
+  score += 0.1;
+  scoreEl.textContent = "Score: " + Math.floor(score);
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = "#606c38";
+  ctx.fillRect(0,360,canvas.width,40);
+
+  const py = player.y + (player.slide ? player.h*0.5 : 0);
+  const ph = player.slide ? player.h*0.5 : player.h;
+
+  if (playerImage.complete && playerImage.naturalWidth > 0) {
+    ctx.drawImage(playerImage, player.x, py, player.w, ph);
+  } else {
+    ctx.fillStyle = "#f4a261";
+    ctx.fillRect(player.x, py, player.w, ph);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(player.x + 38, py + 15, 10, 10);
+  }
+
+  obstacles.forEach(o => {
+    ctx.fillStyle = o.type==="bird" ? "#2a9d8f" : "#264653";
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+  });
+}
+
+function loop() {
+  update();
+  draw();
+  if (!gameOver) animId = requestAnimationFrame(loop);
+}
+
+function resetGame() {
+  score = 0;
+  gameOver = false;
+  obstacles.length = 0;
+  player.y = 300;
+  player.dy = 0;
+  player.slide = false;
+  scoreEl.textContent = "Score: 0";
+  messageEl.textContent = "";
+  spawnTimer = 0;
+  cancelAnimationFrame(animId);
+  loop();
+}
+
+document.querySelectorAll("#menu .btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    speed = Number(btn.dataset.speed);
+    lastSpeed = speed;
+    const label = btn === document.querySelector('[data-speed="3"]') ? "Facile" :
+                  btn === document.querySelector('[data-speed="5"]') ? "Intermédiaire" :
+                  "Difficile";
+    levelTitle.textContent = `Niveau : ${label}`;
+    menu.style.display = "none";
+    game.style.display = "block";
+    resetGame();
+  });
+});
+
+backBtn.addEventListener("click", () => {
+  game.style.display = "none";
+  menu.style.display = "block";
+  messageEl.textContent = "";
+  cancelAnimationFrame(animId);
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key==="r" || e.key==="R") {
+    if (game.style.display === "block") resetGame();
+  }
+  if (e.key==="ArrowUp" && player.y >= 300) {
+    player.dy = player.jump;
+    player.slide = false;
+  }
+  if (e.key==="ArrowDown" && player.y >= 300) {
+    player.slide = true;
+  }
+});
+
+window.addEventListener("keyup", e => {
+  if (e.key==="ArrowDown") player.slide = false;
+});
+</script>
+
+</body>
+</html>
